@@ -1,0 +1,48 @@
+# toolchain / submodule
+riscv-gnu-toolchain/
+
+# archives
+*.zip
+
+# logs
+*.log
+
+# executables / build outputs
+benchmark_sm2_asm
+benchmark_sm2_c
+test_compare_fn_mul
+test_mul_loop
+test_sm2_kex_c
+test_sm2_kex_mont_rv
+test_sm2_kex_rv
+*.out
+*.o
+a.out
+
+# 编译产物
+
+correct_*
+
+test_sm2_*
+
+test_debug
+
+test_mont_debug
+
+test_vs_gmssl
+
+*.o
+
+S1,
+
+S2,
+
+# 编译产物
+correct_*
+test_sm2_*
+test_debug
+test_mont_debug
+test_vs_gmssl
+*.o
+S1,
+S2,
