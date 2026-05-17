@@ -2,8 +2,11 @@
 # SM2 RISC-V 64 Optimization Project Makefile
 # Muse Pi Pro / SpacemiT K1(X60) board-only tuned version
 #
-# fn 层统一固定为：fn_Montgomery.c + asm/fn_mont.S
-# 这样可以保证 fn_mont_mul_ct 等符号由 asm/fn_mont.S 提供
+# Build matrix:
+#   baseline-c    : Prime route + fp C + fn C, no asm
+#   baseline-asm  : Prime route + fp ASM + fn ASM
+#   mont-c        : Montgomery route + fp C + fn C, no asm
+#   mont-asm      : Montgomery route + fp ASM + fn ASM
 # =================================================================
 
 CC      ?= gcc
@@ -94,12 +97,23 @@ QEMU_RUN =
 TEST_SRC = test.c
 
 # -------------------------------------------------
-# fn 层：四个 target 全部固定
-# 恢复 asm/fn_mont.S，以提供 fn_mont_mul_ct 等符号
+# fn 层：拆成 C-only 和 ASM 两套
 # -------------------------------------------------
-FN_FIXED_C      = fn_Montgomery.c
-FN_FIXED_ASM    = asm/fn_mont.S
-FN_FIXED_DEFS   = -DHAVE_FN_MONT_CORE -DUSE_ASM_FN_MONT -DNO_TEST_FN_INTERNALS
+
+# fn 纯 C 版本
+# 用于 baseline-c 和 mont-c
+# 不编译 asm/fn_mont.S
+# 不定义 USE_ASM_FN_MONT
+FN_C_ONLY_C    = fn_Montgomery.c
+FN_C_ONLY_DEFS = -DNO_TEST_FN_INTERNALS
+
+# fn ASM 版本
+# 用于 baseline-asm 和 mont-asm
+# 编译 asm/fn_mont.S
+# 定义 USE_ASM_FN_MONT
+FN_ASM_C       = fn_Montgomery.c
+FN_ASM_S       = asm/fn_mont.S
+FN_ASM_DEFS    = -DHAVE_FN_MONT_CORE -DUSE_ASM_FN_MONT -DNO_TEST_FN_INTERNALS
 
 # -------------------------------------------------
 # Prime / 普通模 p 路线
@@ -109,12 +123,11 @@ CURVE_PRIME_C  = sm2_curve.c
 SCALAR_PRIME_C = sm2_scalar.c
 KEX_PRIME_C    = sm2_kex.c
 
-PRIME_SRCS = \
+PRIME_BASE_SRCS = \
     $(FP_PRIME_C) \
     $(CURVE_PRIME_C) \
     $(SCALAR_PRIME_C) \
     $(KEX_PRIME_C) \
-    $(FN_FIXED_C) \
     $(TEST_SRC)
 
 # -------------------------------------------------
@@ -125,12 +138,11 @@ CURVE_MONT_C   = sm2_curve_mont.c
 SCALAR_MONT_C  = sm2_scalar_mont.c
 KEX_MONT_C     = sm2_kex_mont.c
 
-MONT_SRCS = \
+MONT_BASE_SRCS = \
     $(FP_MONT_C) \
     $(CURVE_MONT_C) \
     $(SCALAR_MONT_C) \
     $(KEX_MONT_C) \
-    $(FN_FIXED_C) \
     $(TEST_SRC)
 
 # -------------------------------------------------
@@ -178,63 +190,69 @@ TARGET_MONT_ASM     = test_mont_asm
 all: $(TARGET_PRIME_C) $(TARGET_PRIME_FP_ASM) $(TARGET_MONT_C) $(TARGET_MONT_ASM)
 
 # -------------------------------------------------
-# Prime 纯 C（fn 固定为 C+asm）
+# baseline-c: Prime + fp C + fn C
+# 不编译任何 .S 文件
 # -------------------------------------------------
-$(TARGET_PRIME_C): $(PRIME_SRCS) $(FN_FIXED_ASM)
-	@echo ">>> Building Prime / Pure C (fn fixed to C+asm) ..."
+$(TARGET_PRIME_C): $(PRIME_BASE_SRCS) $(FN_C_ONLY_C)
+	@echo ">>> Building baseline-c: Prime / fp C / fn C ..."
 	$(CC) $(CPPFLAGS) $(CFLAGS) \
-	      $(FN_FIXED_DEFS) \
-	      $(PRIME_SRCS) $(FN_FIXED_ASM) \
+	      $(FN_C_ONLY_DEFS) \
+	      $(PRIME_BASE_SRCS) $(FN_C_ONLY_C) \
 	      $(LDFLAGS) -o $@
 
 # -------------------------------------------------
-# Prime fp ASM（fn 固定为 C+asm）
+# baseline-asm: Prime + fp ASM + fn ASM
 # -------------------------------------------------
-$(TARGET_PRIME_FP_ASM): $(PRIME_SRCS) $(ASM_FP_PRIME_SRCS) $(FN_FIXED_ASM)
-	@echo ">>> Building Prime / fp ASM (fn fixed to C+asm) ..."
+$(TARGET_PRIME_FP_ASM): $(PRIME_BASE_SRCS) $(FN_ASM_C) $(ASM_FP_PRIME_SRCS) $(FN_ASM_S)
+	@echo ">>> Building baseline-asm: Prime / fp ASM / fn ASM ..."
 	$(CC) $(CPPFLAGS) $(CFLAGS) \
-	      $(FN_FIXED_DEFS) \
+	      $(FN_ASM_DEFS) \
 	      $(ASM_FP_PRIME_DEFS) \
-	      $(PRIME_SRCS) \
-	      $(ASFLAGS) $(ASM_FP_PRIME_SRCS) $(FN_FIXED_ASM) \
+	      $(PRIME_BASE_SRCS) $(FN_ASM_C) \
+	      $(ASFLAGS) $(ASM_FP_PRIME_SRCS) $(FN_ASM_S) \
 	      $(LDFLAGS) -o $@
 
 # -------------------------------------------------
-# Montgomery 纯 C（fn 固定为 C+asm）
+# mont-c: Montgomery + fp C + fn C
+# 不编译任何 .S 文件
 # -------------------------------------------------
-$(TARGET_MONT_C): $(MONT_SRCS) $(FN_FIXED_ASM)
-	@echo ">>> Building Montgomery / Pure C (fn fixed to C+asm) ..."
+$(TARGET_MONT_C): $(MONT_BASE_SRCS) $(FN_C_ONLY_C)
+	@echo ">>> Building mont-c: Montgomery / fp C / fn C ..."
 	$(CC) $(CPPFLAGS) $(CFLAGS) \
-	      -DUSE_FP_MONT $(FN_FIXED_DEFS) \
-	      $(MONT_SRCS) $(FN_FIXED_ASM) \
+	      -DUSE_FP_MONT \
+	      $(FN_C_ONLY_DEFS) \
+	      $(MONT_BASE_SRCS) $(FN_C_ONLY_C) \
 	      $(LDFLAGS) -o $@
 
 # -------------------------------------------------
-# Montgomery ASM（fn 固定为 C+asm）
+# mont-asm: Montgomery + fp ASM + fn ASM
 # -------------------------------------------------
-$(TARGET_MONT_ASM): $(MONT_SRCS) $(ASM_FP_MONT_SRCS) $(FN_FIXED_ASM)
-	@echo ">>> Building Montgomery / fp ASM (fn fixed to C+asm) ..."
+$(TARGET_MONT_ASM): $(MONT_BASE_SRCS) $(FN_ASM_C) $(ASM_FP_MONT_SRCS) $(FN_ASM_S)
+	@echo ">>> Building mont-asm: Montgomery / fp ASM / fn ASM ..."
 	$(CC) $(CPPFLAGS) $(CFLAGS) \
-	      -DUSE_FP_MONT $(FN_FIXED_DEFS) \
+	      -DUSE_FP_MONT \
+	      $(FN_ASM_DEFS) \
 	      $(ASM_FP_MONT_DEFS) \
-	      $(MONT_SRCS) \
-	      $(ASFLAGS) $(ASM_FP_MONT_SRCS) $(FN_FIXED_ASM) \
+	      $(MONT_BASE_SRCS) $(FN_ASM_C) \
+	      $(ASFLAGS) $(ASM_FP_MONT_SRCS) $(FN_ASM_S) \
 	      $(LDFLAGS) -o $@
 
-
+# -------------------------------------------------
+# test_perf: 默认使用 mont-asm 路线
+# -------------------------------------------------
 TARGET_PERF_MONT_ASM = test_perf
-MONT_PERF_SRCS = $(filter-out $(TEST_SRC),$(MONT_SRCS))
+MONT_PERF_SRCS = $(filter-out $(TEST_SRC),$(MONT_BASE_SRCS))
 
-$(TARGET_PERF_MONT_ASM): test_perf.c $(MONT_PERF_SRCS) $(ASM_FP_MONT_SRCS) $(FN_FIXED_ASM)
-	@echo ">>> Building test_perf (Montgomery / fp ASM, fn fixed to C+asm) ..."
+$(TARGET_PERF_MONT_ASM): test_perf.c $(MONT_PERF_SRCS) $(FN_ASM_C) $(ASM_FP_MONT_SRCS) $(FN_ASM_S)
+	@echo ">>> Building test_perf: Montgomery / fp ASM / fn ASM ..."
 	$(CC) $(CPPFLAGS) $(CFLAGS) \
-	      -DUSE_FP_MONT $(FN_FIXED_DEFS) \
+	      -DUSE_FP_MONT \
+	      $(FN_ASM_DEFS) \
 	      $(ASM_FP_MONT_DEFS) \
 	      test_perf.c \
-	      $(MONT_PERF_SRCS) \
-	      $(ASFLAGS) $(ASM_FP_MONT_SRCS) $(FN_FIXED_ASM) \
+	      $(MONT_PERF_SRCS) $(FN_ASM_C) \
+	      $(ASFLAGS) $(ASM_FP_MONT_SRCS) $(FN_ASM_S) \
 	      $(LDFLAGS) -o $@
-
 
 # -------------------------------------------------
 # Run
@@ -250,50 +268,72 @@ run-mont-c: $(TARGET_MONT_C)
 
 run-mont-asm: $(TARGET_MONT_ASM)
 	./$(TARGET_MONT_ASM)
+
 run-test-perf: $(TARGET_PERF_MONT_ASM)
 	./$(TARGET_PERF_MONT_ASM)
+
+# -------------------------------------------------
+# User-friendly aliases
+# -------------------------------------------------
+baseline-c: run-prime-c
+
+baseline-asm: run-prime-asm
+
+mont-c: run-mont-c
+
+mont-asm: run-mont-asm
+
+demo: mont-asm
+
+test: bench-all
+
+bench: bench-all
+
 # -------------------------------------------------
 # Bench
 # -------------------------------------------------
 bench-prime: $(TARGET_PRIME_C) $(TARGET_PRIME_FP_ASM)
 	@echo "========================================================"
-	@echo "CPU_TUNE=$(CPU_TUNE)  fn=C+asm fixed"
+	@echo "CPU_TUNE=$(CPU_TUNE)"
 	@echo "CFLAGS=$(CFLAGS)"
 	@echo "ASFLAGS=$(ASFLAGS)"
-	@echo "=== Prime / Pure C ==="
+	@echo ""
+	@echo "=== baseline-c: Prime / fp C / fn C ==="
 	./$(TARGET_PRIME_C)
 	@echo ""
-	@echo "=== Prime / fp ASM ==="
+	@echo "=== baseline-asm: Prime / fp ASM / fn ASM ==="
 	./$(TARGET_PRIME_FP_ASM)
 	@echo "========================================================"
 
 bench-mont: $(TARGET_MONT_C) $(TARGET_MONT_ASM)
 	@echo "========================================================"
-	@echo "CPU_TUNE=$(CPU_TUNE)  fn=C+asm fixed"
+	@echo "CPU_TUNE=$(CPU_TUNE)"
 	@echo "CFLAGS=$(CFLAGS)"
 	@echo "ASFLAGS=$(ASFLAGS)"
-	@echo "=== Montgomery / Pure C ==="
+	@echo ""
+	@echo "=== mont-c: Montgomery / fp C / fn C ==="
 	./$(TARGET_MONT_C)
 	@echo ""
-	@echo "=== Montgomery / fp ASM ==="
+	@echo "=== mont-asm: Montgomery / fp ASM / fn ASM ==="
 	./$(TARGET_MONT_ASM)
 	@echo "========================================================"
 
 bench-all: $(TARGET_PRIME_C) $(TARGET_PRIME_FP_ASM) $(TARGET_MONT_C) $(TARGET_MONT_ASM)
 	@echo "========================================================"
-	@echo "CPU_TUNE=$(CPU_TUNE)  fn=C+asm fixed"
+	@echo "CPU_TUNE=$(CPU_TUNE)"
 	@echo "CFLAGS=$(CFLAGS)"
 	@echo "ASFLAGS=$(ASFLAGS)"
-	@echo "=== Prime / Pure C ==="
+	@echo ""
+	@echo "=== baseline-c: Prime / fp C / fn C ==="
 	./$(TARGET_PRIME_C)
 	@echo ""
-	@echo "=== Montgomery / Pure C ==="
-	./$(TARGET_MONT_C)
-	@echo ""
-	@echo "=== Prime / fp ASM ==="
+	@echo "=== baseline-asm: Prime / fp ASM / fn ASM ==="
 	./$(TARGET_PRIME_FP_ASM)
 	@echo ""
-	@echo "=== Montgomery / fp ASM ==="
+	@echo "=== mont-c: Montgomery / fp C / fn C ==="
+	./$(TARGET_MONT_C)
+	@echo ""
+	@echo "=== mont-asm: Montgomery / fp ASM / fn ASM ==="
 	./$(TARGET_MONT_ASM)
 	@echo "========================================================"
 
@@ -315,17 +355,18 @@ perf-mont-asm: $(TARGET_MONT_ASM)
 	$(PERF) ./$(TARGET_MONT_ASM)
 
 perf-all: $(TARGET_PRIME_C) $(TARGET_PRIME_FP_ASM) $(TARGET_MONT_C) $(TARGET_MONT_ASM)
-	@echo "=== Prime / Pure C ==="
+	@echo "=== baseline-c: Prime / fp C / fn C ==="
 	$(PERF) ./$(TARGET_PRIME_C)
 	@echo ""
-	@echo "=== Montgomery / Pure C ==="
-	$(PERF) ./$(TARGET_MONT_C)
-	@echo ""
-	@echo "=== Prime / fp ASM ==="
+	@echo "=== baseline-asm: Prime / fp ASM / fn ASM ==="
 	$(PERF) ./$(TARGET_PRIME_FP_ASM)
 	@echo ""
-	@echo "=== Montgomery / fp ASM ==="
+	@echo "=== mont-c: Montgomery / fp C / fn C ==="
+	$(PERF) ./$(TARGET_MONT_C)
+	@echo ""
+	@echo "=== mont-asm: Montgomery / fp ASM / fn ASM ==="
 	$(PERF) ./$(TARGET_MONT_ASM)
+
 perf-test-perf-responder: $(TARGET_PERF_MONT_ASM)
 	$(PERF) ./$(TARGET_PERF_MONT_ASM) responder 20000
 
@@ -337,6 +378,7 @@ perf-test-perf-scalar: $(TARGET_PERF_MONT_ASM)
 
 perf-test-perf-genra: $(TARGET_PERF_MONT_ASM)
 	$(PERF) ./$(TARGET_PERF_MONT_ASM) genra 50000
+
 # -------------------------------------------------
 # Helpers
 # -------------------------------------------------
@@ -347,6 +389,12 @@ print-flags:
 	@echo "CFLAGS=$(CFLAGS)"
 	@echo "ASFLAGS=$(ASFLAGS)"
 	@echo "LDFLAGS=$(LDFLAGS)"
+	@echo ""
+	@echo "Build matrix:"
+	@echo "  baseline-c   = Prime + fp C + fn C"
+	@echo "  baseline-asm = Prime + fp ASM + fn ASM"
+	@echo "  mont-c       = Montgomery + fp C + fn C"
+	@echo "  mont-asm     = Montgomery + fp ASM + fn ASM"
 
 clean:
 	rm -f \
@@ -354,13 +402,14 @@ clean:
 	    $(TARGET_PRIME_FP_ASM) \
 	    $(TARGET_MONT_C) \
 	    $(TARGET_MONT_ASM) \
-		$(TARGET_PERF_MONT_ASM) \
+	    $(TARGET_PERF_MONT_ASM) \
 	    *.o \
 	    *.gcda *.gcno \
 	    default.profraw
 
 .PHONY: all clean print-flags \
         run-prime-c run-prime-asm run-mont-c run-mont-asm run-test-perf \
+        baseline-c baseline-asm mont-c mont-asm demo test bench \
         bench-prime bench-mont bench-all \
         perf-prime-c perf-mont-c perf-prime-asm perf-mont-asm perf-all \
         perf-test-perf-responder perf-test-perf-initiator \
