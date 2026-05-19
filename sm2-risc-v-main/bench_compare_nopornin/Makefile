@@ -5,19 +5,11 @@ SM2_SRC   := /home/sm2/sm2-risc-v-main/sm2-risc-v-main/src
 GMSSL_INC := /home/sm2/GmSSL/include
 GMSSL_LIB := /home/sm2/GmSSL/build/bin
 
-# =========================================================
-# Pornin 版本：
-# c   = Pornin C
-# asm = Pornin full inv ASM + fp ASM backend
-#
-# 说明：
-# 1. C 版本加 -DUSE_PORNIN_INV，并链接 fp_pornin_inv.c
-# 2. ASM 版本加 -DUSE_PORNIN_INV -DUSE_PORNIN_FULL_INV_ASM
-# 3. ASM 版本链接 asm/pornin_full_inv.S
-# 4. 为兼容 full_inv.S 可能依赖的符号，同时链接 pornin_inner31.S / pornin_lincomb.S
-# =========================================================
-
-CFLAGS_COMMON  := -O3 -fno-stack-protector -I$(SM2_SRC) -I$(GMSSL_INC)
+# 无 Pornin 版本：
+# 1. 不加 -DUSE_PORNIN_INV
+# 2. 不链接 fp_pornin_inv.c
+# 3. 使用 fp_montgomery.c 中 #ifndef USE_PORNIN_INV 包住的原始 fp_mont_inv()
+CFLAGS_COMMON := -O3 -fno-stack-protector -I$(SM2_SRC) -I$(GMSSL_INC)
 LDFLAGS_COMMON := -L$(GMSSL_LIB) -lgmssl
 
 BUILD_DIR    := build
@@ -27,20 +19,17 @@ C_PREF_DIR   := $(BUILD_DIR)/c_pref
 ASM_PREF_DIR := $(BUILD_DIR)/asm_pref
 
 # =========================================================
-# Core C 源文件：Pornin 版本，包含 fp_pornin_inv.c
+# Core C 源文件：无 Pornin，不包含 fp_pornin_inv.c
 # =========================================================
-
 CORE_C_SRCS := \
 	$(SM2_SRC)/fp_montgomery.c \
-	$(SM2_SRC)/fp_pornin_inv.c \
 	$(SM2_SRC)/fn_Montgomery.c \
 	$(SM2_SRC)/sm2_curve_mont.c \
 	$(SM2_SRC)/sm2_scalar_mont.c
 
 # =========================================================
-# fp ASM 源文件
+# Fp ASM 源文件
 # =========================================================
-
 FP_ASM_SRCS := \
 	$(SM2_SRC)/asm/fp_mont_add.S \
 	$(SM2_SRC)/asm/fp_mont_sub.S \
@@ -53,28 +42,16 @@ FN_ASM_SRCS := \
 	$(SM2_SRC)/asm/fn_mont.S
 
 # =========================================================
-# Pornin ASM 源文件
-# =========================================================
-
-PORNIN_ASM_SRCS := \
-	$(SM2_SRC)/asm/pornin_inner31.S \
-	$(SM2_SRC)/asm/pornin_lincomb.S \
-	$(SM2_SRC)/asm/pornin_full_inv.S
-
-# =========================================================
 # 原始对象文件
 # =========================================================
-
 C_CORE_OBJS := \
 	$(C_DIR)/fp_montgomery.o \
-	$(C_DIR)/fp_pornin_inv.o \
 	$(C_DIR)/fn_Montgomery.o \
 	$(C_DIR)/sm2_curve_mont.o \
 	$(C_DIR)/sm2_scalar_mont.o
 
 ASM_CORE_OBJS := \
 	$(ASM_DIR)/fp_montgomery.o \
-	$(ASM_DIR)/fp_pornin_inv.o \
 	$(ASM_DIR)/fn_Montgomery.o \
 	$(ASM_DIR)/sm2_curve_mont.o \
 	$(ASM_DIR)/sm2_scalar_mont.o
@@ -90,25 +67,17 @@ ASM_FP_OBJS := \
 ASM_FN_OBJS := \
 	$(ASM_DIR)/fn_mont.o
 
-ASM_PORNIN_OBJS := \
-	$(ASM_DIR)/pornin_inner31.o \
-	$(ASM_DIR)/pornin_lincomb.o \
-	$(ASM_DIR)/pornin_full_inv.o
-
 # =========================================================
 # 前缀化后的对象文件
 # =========================================================
-
 C_CORE_PREF_OBJS := \
 	$(C_PREF_DIR)/fp_montgomery.o \
-	$(C_PREF_DIR)/fp_pornin_inv.o \
 	$(C_PREF_DIR)/fn_Montgomery.o \
 	$(C_PREF_DIR)/sm2_curve_mont.o \
 	$(C_PREF_DIR)/sm2_scalar_mont.o
 
 ASM_CORE_PREF_OBJS := \
 	$(ASM_PREF_DIR)/fp_montgomery.o \
-	$(ASM_PREF_DIR)/fp_pornin_inv.o \
 	$(ASM_PREF_DIR)/fn_Montgomery.o \
 	$(ASM_PREF_DIR)/sm2_curve_mont.o \
 	$(ASM_PREF_DIR)/sm2_scalar_mont.o
@@ -124,19 +93,13 @@ ASM_FP_PREF_OBJS := \
 ASM_FN_PREF_OBJS := \
 	$(ASM_PREF_DIR)/fn_mont.o
 
-ASM_PORNIN_PREF_OBJS := \
-	$(ASM_PREF_DIR)/pornin_inner31.o \
-	$(ASM_PREF_DIR)/pornin_lincomb.o \
-	$(ASM_PREF_DIR)/pornin_full_inv.o
-
 ALL_PREF_OBJS := \
 	$(C_CORE_PREF_OBJS) \
 	$(ASM_CORE_PREF_OBJS) \
 	$(ASM_FP_PREF_OBJS) \
-	$(ASM_FN_PREF_OBJS) \
-	$(ASM_PORNIN_PREF_OBJS)
+	$(ASM_FN_PREF_OBJS)
 
-.PHONY: all run perf perf_c clean dirs show
+.PHONY: all run perf clean dirs show
 
 all: bench_all
 
@@ -154,82 +117,32 @@ show:
 	@echo "GMSSL_INC=$(GMSSL_INC)"
 	@echo "GMSSL_LIB=$(GMSSL_LIB)"
 	@echo "CFLAGS_COMMON=$(CFLAGS_COMMON)"
-	@echo "MODE=Pornin C / Pornin full inv ASM"
-	@echo "c   = Pornin C"
-	@echo "asm = Pornin full inv ASM + fp ASM backend"
+	@echo "MODE=No Pornin"
 
 dirs:
 	mkdir -p $(C_DIR) $(ASM_DIR) $(C_PREF_DIR) $(ASM_PREF_DIR)
 
 # =========================================================
-# 1) 编译 Pornin C 版本对象
-#    c_ 前缀版本：
-#    -DUSE_PORNIN_INV
-#    不加 -DUSE_PORNIN_FULL_INV_ASM
+# 1) 编原始 C 版本对象：无 Pornin
 # =========================================================
-
 $(C_DIR)/fp_montgomery.o: $(SM2_SRC)/fp_montgomery.c | dirs
-	$(CC) $(CFLAGS_COMMON) \
-		-DBENCH_USE_ASM=0 \
-		-DUSE_PORNIN_INV \
-		-c $< -o $@
-
-$(C_DIR)/fp_pornin_inv.o: $(SM2_SRC)/fp_pornin_inv.c | dirs
-	$(CC) $(CFLAGS_COMMON) \
-		-DBENCH_USE_ASM=0 \
-		-DUSE_PORNIN_INV \
-		-c $< -o $@
+	$(CC) $(CFLAGS_COMMON) -DBENCH_USE_ASM=0 -c $< -o $@
 
 $(C_DIR)/fn_Montgomery.o: $(SM2_SRC)/fn_Montgomery.c | dirs
-	$(CC) $(CFLAGS_COMMON) \
-		-DBENCH_USE_ASM=0 \
-		-DUSE_PORNIN_INV \
-		-c $< -o $@
+	$(CC) $(CFLAGS_COMMON) -DBENCH_USE_ASM=0 -c $< -o $@
 
 $(C_DIR)/sm2_curve_mont.o: $(SM2_SRC)/sm2_curve_mont.c | dirs
-	$(CC) $(CFLAGS_COMMON) \
-		-DBENCH_USE_ASM=0 \
-		-DUSE_PORNIN_INV \
-		-c $< -o $@
+	$(CC) $(CFLAGS_COMMON) -DBENCH_USE_ASM=0 -c $< -o $@
 
 $(C_DIR)/sm2_scalar_mont.o: $(SM2_SRC)/sm2_scalar_mont.c | dirs
-	$(CC) $(CFLAGS_COMMON) \
-		-DBENCH_USE_ASM=0 \
-		-DUSE_PORNIN_INV \
-		-c $< -o $@
+	$(CC) $(CFLAGS_COMMON) -DBENCH_USE_ASM=0 -c $< -o $@
 
 # =========================================================
-# 2) 编译 Pornin full inv ASM 版本对象
-#    asm_ 前缀版本：
-#    -DUSE_PORNIN_INV
-#    -DUSE_PORNIN_FULL_INV_ASM
-#    同时启用 fp ASM
+# 2) 编原始 ASM 版本对象：无 Pornin + fp ASM
 # =========================================================
-
 $(ASM_DIR)/fp_montgomery.o: $(SM2_SRC)/fp_montgomery.c | dirs
 	$(CC) $(CFLAGS_COMMON) \
 		-DBENCH_USE_ASM=1 \
-		-DUSE_PORNIN_INV \
-		-DUSE_PORNIN_FULL_INV_ASM \
-		-DUSE_PORNIN_INNER31_ASM \
-		-DUSE_PORNIN_LINCOMB_ASM \
-		-DUSE_PORNIN_UPDATE_UV_ASM \
-		-DUSE_RV64_ASM_ADD \
-		-DUSE_RV64_ASM_SUB \
-		-DUSE_RV64_ASM_NEG \
-		-DUSE_RV64_ASM_MUL \
-		-DUSE_RV64_ASM_SQR \
-		-DUSE_RV64_ASM_TO_FROM \
-		-c $< -o $@
-
-$(ASM_DIR)/fp_pornin_inv.o: $(SM2_SRC)/fp_pornin_inv.c | dirs
-	$(CC) $(CFLAGS_COMMON) \
-		-DBENCH_USE_ASM=1 \
-		-DUSE_PORNIN_INV \
-		-DUSE_PORNIN_FULL_INV_ASM \
-		-DUSE_PORNIN_INNER31_ASM \
-		-DUSE_PORNIN_LINCOMB_ASM \
-		-DUSE_PORNIN_UPDATE_UV_ASM \
 		-DUSE_RV64_ASM_ADD \
 		-DUSE_RV64_ASM_SUB \
 		-DUSE_RV64_ASM_NEG \
@@ -241,11 +154,6 @@ $(ASM_DIR)/fp_pornin_inv.o: $(SM2_SRC)/fp_pornin_inv.c | dirs
 $(ASM_DIR)/fn_Montgomery.o: $(SM2_SRC)/fn_Montgomery.c | dirs
 	$(CC) $(CFLAGS_COMMON) \
 		-DBENCH_USE_ASM=1 \
-		-DUSE_PORNIN_INV \
-		-DUSE_PORNIN_FULL_INV_ASM \
-		-DUSE_PORNIN_INNER31_ASM \
-		-DUSE_PORNIN_LINCOMB_ASM \
-		-DUSE_PORNIN_UPDATE_UV_ASM \
 		-DUSE_RV64_ASM_ADD \
 		-DUSE_RV64_ASM_SUB \
 		-DUSE_RV64_ASM_NEG \
@@ -257,11 +165,6 @@ $(ASM_DIR)/fn_Montgomery.o: $(SM2_SRC)/fn_Montgomery.c | dirs
 $(ASM_DIR)/sm2_curve_mont.o: $(SM2_SRC)/sm2_curve_mont.c | dirs
 	$(CC) $(CFLAGS_COMMON) \
 		-DBENCH_USE_ASM=1 \
-		-DUSE_PORNIN_INV \
-		-DUSE_PORNIN_FULL_INV_ASM \
-		-DUSE_PORNIN_INNER31_ASM \
-		-DUSE_PORNIN_LINCOMB_ASM \
-		-DUSE_PORNIN_UPDATE_UV_ASM \
 		-DUSE_RV64_ASM_ADD \
 		-DUSE_RV64_ASM_SUB \
 		-DUSE_RV64_ASM_NEG \
@@ -273,11 +176,6 @@ $(ASM_DIR)/sm2_curve_mont.o: $(SM2_SRC)/sm2_curve_mont.c | dirs
 $(ASM_DIR)/sm2_scalar_mont.o: $(SM2_SRC)/sm2_scalar_mont.c | dirs
 	$(CC) $(CFLAGS_COMMON) \
 		-DBENCH_USE_ASM=1 \
-		-DUSE_PORNIN_INV \
-		-DUSE_PORNIN_FULL_INV_ASM \
-		-DUSE_PORNIN_INNER31_ASM \
-		-DUSE_PORNIN_LINCOMB_ASM \
-		-DUSE_PORNIN_UPDATE_UV_ASM \
 		-DUSE_RV64_ASM_ADD \
 		-DUSE_RV64_ASM_SUB \
 		-DUSE_RV64_ASM_NEG \
@@ -287,9 +185,8 @@ $(ASM_DIR)/sm2_scalar_mont.o: $(SM2_SRC)/sm2_scalar_mont.c | dirs
 		-c $< -o $@
 
 # =========================================================
-# 3) 编译 fp ASM .S 对象
+# 3) 编 ASM .S 对象
 # =========================================================
-
 $(ASM_DIR)/fp_mont_add.o: $(SM2_SRC)/asm/fp_mont_add.S | dirs
 	$(CC) $(CFLAGS_COMMON) -c $< -o $@
 
@@ -312,28 +209,9 @@ $(ASM_DIR)/fn_mont.o: $(SM2_SRC)/asm/fn_mont.S | dirs
 	$(CC) $(CFLAGS_COMMON) -c $< -o $@
 
 # =========================================================
-# 4) 编译 Pornin ASM .S 对象
+# 4) 给 C 版本对象统一加 c_ 前缀
 # =========================================================
-
-$(ASM_DIR)/pornin_inner31.o: $(SM2_SRC)/asm/pornin_inner31.S | dirs
-	$(CC) $(CFLAGS_COMMON) -c $< -o $@
-
-$(ASM_DIR)/pornin_lincomb.o: $(SM2_SRC)/asm/pornin_lincomb.S | dirs
-	$(CC) $(CFLAGS_COMMON) -c $< -o $@
-
-$(ASM_DIR)/pornin_full_inv.o: $(SM2_SRC)/asm/pornin_full_inv.S | dirs
-	$(CC) $(CFLAGS_COMMON) \
-		-DUSE_PORNIN_FULL_INV_ASM \
-		-c $< -o $@
-
-# =========================================================
-# 5) 给 C 版本对象统一加 c_ 前缀
-# =========================================================
-
 $(C_PREF_DIR)/fp_montgomery.o: $(C_DIR)/fp_montgomery.o | dirs
-	$(OBJCOPY) --prefix-symbols=c_ $< $@
-
-$(C_PREF_DIR)/fp_pornin_inv.o: $(C_DIR)/fp_pornin_inv.o | dirs
 	$(OBJCOPY) --prefix-symbols=c_ $< $@
 
 $(C_PREF_DIR)/fn_Montgomery.o: $(C_DIR)/fn_Montgomery.o | dirs
@@ -346,13 +224,9 @@ $(C_PREF_DIR)/sm2_scalar_mont.o: $(C_DIR)/sm2_scalar_mont.o | dirs
 	$(OBJCOPY) --prefix-symbols=c_ $< $@
 
 # =========================================================
-# 6) 给 ASM 版本对象统一加 asm_ 前缀
+# 5) 给 ASM 版本对象统一加 asm_ 前缀
 # =========================================================
-
 $(ASM_PREF_DIR)/fp_montgomery.o: $(ASM_DIR)/fp_montgomery.o | dirs
-	$(OBJCOPY) --prefix-symbols=asm_ $< $@
-
-$(ASM_PREF_DIR)/fp_pornin_inv.o: $(ASM_DIR)/fp_pornin_inv.o | dirs
 	$(OBJCOPY) --prefix-symbols=asm_ $< $@
 
 $(ASM_PREF_DIR)/fn_Montgomery.o: $(ASM_DIR)/fn_Montgomery.o | dirs
@@ -385,19 +259,9 @@ $(ASM_PREF_DIR)/fp_mont_to_from.o: $(ASM_DIR)/fp_mont_to_from.o | dirs
 $(ASM_PREF_DIR)/fn_mont.o: $(ASM_DIR)/fn_mont.o | dirs
 	$(OBJCOPY) --prefix-symbols=asm_ $< $@
 
-$(ASM_PREF_DIR)/pornin_inner31.o: $(ASM_DIR)/pornin_inner31.o | dirs
-	$(OBJCOPY) --prefix-symbols=asm_ $< $@
-
-$(ASM_PREF_DIR)/pornin_lincomb.o: $(ASM_DIR)/pornin_lincomb.o | dirs
-	$(OBJCOPY) --prefix-symbols=asm_ $< $@
-
-$(ASM_PREF_DIR)/pornin_full_inv.o: $(ASM_DIR)/pornin_full_inv.o | dirs
-	$(OBJCOPY) --prefix-symbols=asm_ $< $@
-
 # =========================================================
-# 7) 最终链接 bench 程序
+# 6) 最终链接统一 bench 程序
 # =========================================================
-
 bench_all: bench_all.c $(ALL_PREF_OBJS)
 	$(CC) $(CFLAGS_COMMON) \
 		bench_all.c \
