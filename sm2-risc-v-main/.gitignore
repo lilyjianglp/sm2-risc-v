@@ -1,0 +1,31 @@
+# Build outputs
+src/test_prime_c
+src/test_prime_fp_asm
+src/test_mont_c
+src/test_mont_asm
+src/test_perf
+
+# Correctness test outputs
+src/test_correct_prime_c
+src/test_correct_prime_fp_asm
+src/test_correct_mont_c
+src/test_correct_mont_asm
+
+# Old / temporary test binaries
+src/test_barrett_c
+src/test_barrett_fp_asm
+src/test_fp_mont_correctness_asm
+
+# Perf outputs
+src/perf.data
+src/perf.data.old
+
+# Dump / disassembly files
+src/*.dump
+src/*.dis
+
+# Object / profile files
+src/*.o
+src/*.gcda
+src/*.gcno
+src/default.profraw
