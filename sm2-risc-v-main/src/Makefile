@@ -27,8 +27,8 @@ USE_PGO    ?= 0
 # -----------------------------------------------------------------
 # Board-specific CPU tuning
 # -----------------------------------------------------------------
-CPU_TUNE   := spacemit-x60
-CPU_CFLAGS := -mcpu=spacemit-x60
+CPU_TUNE   ?= spacemit-x60
+CPU_CFLAGS ?= -mcpu=spacemit-x60
 
 # -----------------------------------------------------------------
 # Optimization / common flags
