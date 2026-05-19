@@ -213,8 +213,7 @@ hello im Aria
 
 在 Windows 环境下可执行：
 ```bash
-cd C:\Users\Desktop\SM2\frontend
-$env:Path = "C:\Program Files\nodejs;$env:Path"
+cd frontend
 npm.cmd run dev -- --host 127.0.0.1 --port 3000
 ```
 浏览器打开：
